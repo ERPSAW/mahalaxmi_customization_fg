@@ -303,9 +303,9 @@
 
 
 
-// // =======================
-// // Parent Form Events
-// // =======================
+// =======================
+// Parent Form Events
+// =======================
 // frappe.ui.form.on('Stock Entry', {
 
 //     refresh(frm) {
@@ -777,25 +777,27 @@
 // }
 
 
-
-
-// =======================
-// Parent Form Events
-// =======================
 frappe.ui.form.on('Stock Entry', {
 
-    // refresh(frm) {
-    //     calculate_all(frm);
-    //     refresh_all_rows(frm);
-    // },
+    onload(frm) {
+        refresh_all_rows(frm);
+    },
 
     validate(frm) {
         calculate_pm_cost(frm);
         calculate_all(frm);
-    },
 
-    onload(frm) {
-        refresh_all_rows(frm);
+        (frm.doc.items || []).forEach(function(row) {
+            let basic_rate = flt(row.basic_rate);
+            if (basic_rate > 0) {
+                frappe.model.set_value(
+                    row.doctype,
+                    row.name,
+                    'custom_final_rate_after_loss',
+                    basic_rate
+                );
+            }
+        });
     },
 
     items_add(frm) {
@@ -837,13 +839,11 @@ frappe.ui.form.on('Stock Entry', {
 frappe.ui.form.on('Stock Entry Detail', {
 
     item_code(frm, cdt, cdn) {
-
         calculate_pm_cost(frm);
 
         let items = frm.doc.items || [];
 
         if (items.length > 1) {
-
             let first_row_rate = flt(items[0].basic_rate);
 
             items.forEach((row, idx) => {
@@ -863,16 +863,13 @@ frappe.ui.form.on('Stock Entry Detail', {
         calculate_totals(frm);
         calculate_all(frm);
 
-        // Latest batch fetch
         let row = locals[cdt][cdn];
         if (row.item_code) {
             frappe.call({
                 method: "frappe.client.get_list",
                 args: {
                     doctype: "Batch",
-                    filters: {
-                        item: row.item_code
-                    },
+                    filters: { item: row.item_code },
                     fields: ["name", "creation"],
                     order_by: "creation desc",
                     limit_page_length: 1
@@ -976,7 +973,6 @@ frappe.ui.form.on('Stock Entry Detail', {
 // PM Cost Logic
 // =======================
 function calculate_pm_cost(frm) {
-
     let items = frm.doc.items || [];
     let pm_map = {};
 
@@ -987,20 +983,16 @@ function calculate_pm_cost(frm) {
     });
 
     items.forEach(row => {
-
         if (row.custom_packaging_item && pm_map[row.custom_packaging_item] != null) {
-
             let new_val = flt(pm_map[row.custom_packaging_item]);
 
             if (row.custom_per_unit_pm_cost !== new_val) {
-
                 frappe.model.set_value(
                     row.doctype,
                     row.name,
                     'custom_per_unit_pm_cost',
                     new_val
                 );
-
                 calculate_row_values(frm, row.doctype, row.name);
             }
         }
@@ -1012,7 +1004,6 @@ function calculate_pm_cost(frm) {
 // Row Level Calculation
 // =======================
 function calculate_row_values(frm, cdt, cdn) {
-
     let row = locals[cdt][cdn];
 
     let qty         = flt(row.qty);
@@ -1030,18 +1021,13 @@ function calculate_row_values(frm, cdt, cdn) {
     let is_source_row = items.length > 0 && row.name === items[0].name;
 
     if (!is_source_row) {
-
         if (per_unit_pm > 0) {
-
             let total_per_packet = per_packet_cost + per_unit_pm;
-
             frappe.model.set_value(cdt, cdn, 'custom_total_per_packet_fg_cost', total_per_packet);
 
             let final_rate = flt(row.custom_final_rate_after_loss);
             frappe.model.set_value(cdt, cdn, 'basic_rate', final_rate > 0 ? final_rate : total_per_packet);
-
         } else {
-
             frappe.model.set_value(cdt, cdn, 'custom_total_per_packet_fg_cost', 0);
 
             if (per_packet_cost > 0) {
@@ -1057,18 +1043,15 @@ function calculate_row_values(frm, cdt, cdn) {
 // Total Calculation
 // =======================
 function calculate_totals(frm) {
-
     let fg_total    = 0;
     let sfg_total   = 0;
     let per_kg_cost = 0;
 
     (frm.doc.items || []).forEach(function(row) {
-
         if (row.custom__is_fg_item) {
             fg_total    += flt(row.custom_total_kg_consumed);
             per_kg_cost  = flt(row.custom_per_kg_cost_);
         }
-
         if (row.custom_is_sfg_item) {
             sfg_total += flt(row.qty);
         }
@@ -1115,7 +1098,7 @@ function calculate_fg_total(frm) {
 // Process Loss %
 // =======================
 function calculate_process_loss(frm) {
-    let loss_qty = flt(frm.doc.custom_process_loss_quantity);
+    let loss_qty       = flt(frm.doc.custom_process_loss_quantity);
     let total_outgoing = flt(frm.doc.custom_total_outgoing_kg_sfg__);
     let result = 0;
     if (total_outgoing > 0) {
@@ -1126,11 +1109,11 @@ function calculate_process_loss(frm) {
 
 
 // =======================
-// Distribution Logic
+// Distribution Logic  ← UPDATED
 // =======================
 function calculate_distribution(frm) {
 
-    let total_packets = flt(frm.doc.custom_total_packets_produced);
+    let total_packets        = flt(frm.doc.custom_total_packets_produced);
     let total_packaging_loss = flt(frm.doc.custom_packaging_loss_amount);
 
     (frm.doc.items || []).forEach(row => {
@@ -1144,6 +1127,7 @@ function calculate_distribution(frm) {
             return;
         }
 
+        // distributed_process_loss
         let distribution = 0;
         if (total_packets > 0) {
             distribution = flt(row.qty) / total_packets;
@@ -1156,6 +1140,7 @@ function calculate_distribution(frm) {
             flt(distribution)
         );
 
+        // distributed_rate
         let distributed_rate = distribution * total_packaging_loss;
 
         frappe.model.set_value(
@@ -1165,16 +1150,23 @@ function calculate_distribution(frm) {
             flt(distributed_rate)
         );
 
-        let basic_rate =
-            flt(row.basic_rate) ||
-            flt(row.custom_total_per_packet_fg_cost) ||
-            flt(row.custom_per_packet_fg_cost);
+        // custom_final_rate_after_loss
+        // Formula: custom_total_per_packet_fg_cost + (custom_distributed_rate / qty)
+        let total_per_packet = flt(row.custom_total_per_packet_fg_cost);
+        let qty              = flt(row.qty);
+        let final_rate       = 0;
+
+        if (qty > 0) {
+            final_rate = total_per_packet + (distributed_rate / qty);
+        } else {
+            final_rate = total_per_packet;
+        }
 
         frappe.model.set_value(
             row.doctype,
             row.name,
             'custom_final_rate_after_loss',
-            parseFloat(flt(basic_rate).toFixed(2))
+            parseFloat(flt(final_rate).toFixed(2))
         );
     });
 }
@@ -1184,15 +1176,15 @@ function calculate_distribution(frm) {
 // Toggle Process Loss Fields
 // =======================
 function toggle_process_loss_fields(frm, cdt, cdn) {
-    var row = locals[cdt][cdn];
+    var row  = locals[cdt][cdn];
     var show = row.custom_process_loss ? true : false;
+
     var fields = [
         'custom_distributed_process_loss',
         'custom_distributed_rate',
         'custom_final_rate_after_loss'
     ];
 
-    // Row expand hone par individual field hide/show
     fields.forEach(function(field) {
         var docfield = frappe.meta.get_docfield(cdt, field, cdn);
         if (docfield) {
@@ -1200,7 +1192,6 @@ function toggle_process_loss_fields(frm, cdt, cdn) {
         }
     });
 
-    // Grid column level toggle
     fields.forEach(function(field) {
         frm.fields_dict['items'].grid.toggle_display(field, show);
     });
