@@ -3,6 +3,7 @@
 // =============================================
 frappe.ui.form.on('Stock Entry', {
     setup(frm) {
+        console.log("=================")
         frm._freeze_fg_qty = frm.doc.fg_completed_qty || 0;
 
         frm.script_manager.trigger = new Proxy(frm.script_manager.trigger, {
@@ -213,3 +214,4 @@ function set_grinding_loss(frm) {
     }
     frm.set_value('custom_grinding_loss_', flt(loss_percentage, 2));
 }
+
