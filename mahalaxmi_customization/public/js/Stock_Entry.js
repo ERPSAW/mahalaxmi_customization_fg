@@ -509,17 +509,18 @@ frappe.ui.form.on('Stock Entry Detail', {
     },
 
     t_warehouse(frm, cdt, cdn) {
-        calculate_all(frm);
+    calculate_all(frm);
 
-        // is_scrap_item logic
-        let row = locals[cdt][cdn];
-        if (row.t_warehouse) {
-            frappe.model.set_value(cdt, cdn, "is_scrap_item", 1);
-        } else {
-            frappe.model.set_value(cdt, cdn, "is_scrap_item", 0);
-        }
-        frm.refresh_field("items");
-    },
+    let row = locals[cdt][cdn];
+
+    if (frm.doc.stock_entry_type === "Manufacture" && row.t_warehouse) {
+        frappe.model.set_value(cdt, cdn, "is_scrap_item", 1);
+    } else {
+        frappe.model.set_value(cdt, cdn, "is_scrap_item", 0);
+    }
+
+    frm.refresh_field("items");
+},
 
     is_finished_item(frm, cdt, cdn) {
         calculate_all(frm);
