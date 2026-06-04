@@ -1,11 +1,17 @@
 frappe.ui.form.on('Stock Entry', {
     setup(frm) {
-        frm.doc._freeze_fg_qty = frm.doc.fg_completed_qty || 0;
+        // ✅ FIX 1: Don't freeze at 0 — use null so update_process_loss can fallback to finished_qty
+        frm.doc._freeze_fg_qty = frm.doc.fg_completed_qty > 0
+            ? frm.doc.fg_completed_qty
+            : null;
     },
 
     refresh(frm) {
         frm.set_df_property('fg_completed_qty', 'read_only', 0);
-        frm.doc._freeze_fg_qty = frm.doc.fg_completed_qty || 0;
+        // ✅ FIX 2: Same null-safe freeze on refresh
+        frm.doc._freeze_fg_qty = frm.doc.fg_completed_qty > 0
+            ? frm.doc.fg_completed_qty
+            : null;
         update_process_loss(frm);
 
         // Use silent calc on refresh to avoid dirtying form
@@ -41,6 +47,7 @@ frappe.ui.form.on('Stock Entry', {
         setTimeout(function() {
             calculate_all_silent(frm);
         }, 800);
+        refresh_all_rows(frm);
     },
 
     onload_post_render(frm) {
@@ -76,10 +83,6 @@ frappe.ui.form.on('Stock Entry', {
 
 		frm.refresh_field("fg_completed_qty");
 	},
-
-    onload(frm) {
-        refresh_all_rows(frm);
-    },
 
     validate(frm) {
         calculate_pm_cost(frm);
@@ -331,7 +334,14 @@ function update_process_loss(frm) {
         }
     });
 
-    let fg_qty = flt(frm.doc._freeze_fg_qty || frm.doc.fg_completed_qty);
+    // ✅ FIX 3: null-safe check + fallback to finished_qty if fg_qty is 0/null
+    let fg_qty = flt(frm.doc._freeze_fg_qty != null
+        ? frm.doc._freeze_fg_qty
+        : frm.doc.fg_completed_qty);
+
+    if (!fg_qty && finished_qty > 0) {
+        fg_qty = finished_qty;
+    }
 
     // fg_completed_qty freeze rakho — direct assignment, no dirty
     frm.doc.fg_completed_qty = fg_qty;
